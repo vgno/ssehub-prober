@@ -4,15 +4,15 @@ import (
     "log"
     "fmt"
     "time"
-    //"net/http"
+    "net/http"
 
     "github.com/satori/go.uuid"
     "github.com/spf13/viper"
     "github.com/streadway/amqp"
     "github.com/fsnotify/fsnotify"
-    // "github.com/DataDog/datadog-go/statsd"
+    "gopkg.in/alexcesaro/statsd.v2"
     "github.com/prometheus/client_golang/prometheus"
-    //"github.com/prometheus/client_golang/prometheus/promhttp"
+    "github.com/prometheus/client_golang/prometheus/promhttp"
 
     "github.com/vgno/ssehub-prober/sse"
 )
@@ -85,13 +85,30 @@ func probeHandler() {
 
 func statsHandler() {
     shouldTrackPrometheus := viper.GetBool("collectors.prometheus.enabled")
+    shouldTrackStatsd := viper.GetBool("collectors.statsd.enabled")
+
+    var statsdClient* statsd.Client
+    var statsdError error
+
+    if (shouldTrackStatsd) {
+        statsdClient, statsdError = statsd.New(
+            statsd.Address(viper.GetString("collectors.statsd.address")),
+        )
+
+        failOnError(statsdError, "StatsD: Failed to connect to statsd")
+    }
 
     for {
         v := <- statsChannel
 
+        log.Printf("Oberserving value %d", v)
+
         if (shouldTrackPrometheus) {
-            log.Printf("Oberserving value in prometheus %d", v)
             prometheusStats.Observe(float64(v))
+        }
+
+        if (shouldTrackStatsd) {
+            statsdClient.Histogram("ssehub.response_time", float64(v))
         }
     }
 }
@@ -121,5 +138,7 @@ func main() {
     go probeHandler()
     go amqpHandler()
     go statsHandler()
-    for {}
+
+    http.Handle("/metrics", promhttp.Handler())
+    log.Fatal(http.ListenAndServe(":8080", nil))
 }

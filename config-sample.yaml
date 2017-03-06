@@ -1,0 +1,16 @@
+ssehub:
+  url: http://sse.example.com/sample
+  interval: 10
+amqp:
+  host: ssehub-rabbitmq.exmaple.com
+  port: 5672
+  exchange: sse.fanout
+  path: sample
+
+collectors:
+  statsd:
+    enabled: false
+    address: statsd.example.com:8125
+
+  prometheus:
+    enabled: false
