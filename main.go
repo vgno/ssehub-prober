@@ -25,7 +25,7 @@ func failOnError(err error, msg string) {
 
 var probesSent = make(map[string]time.Time)
 var probesReceived = make(chan *sse.Event)
-var statsChannel = make(chan int)
+var statsChannel = make(chan float64)
 
 func amqpHandler() {
     host := fmt.Sprintf("amqp://%s:%d/", viper.GetString("amqp.host"), viper.GetInt("amqp.port"))
@@ -74,7 +74,7 @@ func probeHandler() {
         if (v.Type == "probe") {
             if probe, ok := probesSent[v.Id]; ok {
                 duration := time.Since(probe)
-                diff := int(duration.Nanoseconds() / 1000 / 1000)
+                diff := float64(duration.Seconds() * 1e3)
                 delete(probesSent, v.Id)
 
                 statsChannel <- diff
@@ -101,14 +101,14 @@ func statsHandler() {
     for {
         v := <- statsChannel
 
-        log.Printf("Oberserving value %d", v)
+        log.Printf("Oberserving value %f", v)
 
         if (shouldTrackPrometheus) {
-            prometheusStats.Observe(float64(v))
+            prometheusStats.Observe(v)
         }
 
         if (shouldTrackStatsd) {
-            statsdClient.Histogram("ssehub.response_time", float64(v))
+            statsdClient.Histogram("ssehub.response_time", v)
         }
     }
 }
