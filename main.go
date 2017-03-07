@@ -65,7 +65,7 @@ func amqpHandler() {
 }
 
 func probeHandler() {
-    sse.Notify(viper.GetString("ssehub.url"), probesReceived)
+    sse.Notify(viper.GetString("ssehub.url"), probesReceived, true)
 
     log.Printf("SSE: Connected to %s", viper.GetString("ssehub.url"))
 
@@ -112,12 +112,14 @@ func statsHandler() {
         }
     }
 }
+
 var (
     prometheusStats = prometheus.NewHistogram(prometheus.HistogramOpts{
         Name: "ssehub_response_time_miliseconds",
         Help: "Response time of the ssehub.",
     })
 )
+
 func init() {
     // Register the summary and the histogram with Prometheus's default registry.
     prometheus.MustRegister(prometheusStats)

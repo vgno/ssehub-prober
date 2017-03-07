@@ -25,8 +25,8 @@ var (
 //Client is the default client used for requests.
 var Client = &http.Client{}
 
-func liveReq(verb, uri string, body io.Reader) (*http.Request, error) {
-    req, err := GetReq(verb, uri, body)
+func liveReq(method, uri string, body io.Reader) (*http.Request, error) {
+    req, err := http.NewRequest(method, uri, body)
     if err != nil {
         return nil, err
     }
@@ -44,16 +44,9 @@ type Event struct {
     Data io.Reader
 }
 
-//GetReq is a function to return a single request. It will be used by notify to
-//get a request and can be replaces if additional configuration is desired on
-//the request. The "Accept" header will necessarily be overwritten.
-var GetReq = func(verb, uri string, body io.Reader) (*http.Request, error) {
-    return http.NewRequest(verb, uri, body)
-}
-
 //Notify takes a uri and channel, and will send an Event down the channel when
 //recieved.
-func Notify(uri string, evCh chan *Event) error {
+func Notify(uri string, evCh chan *Event, reconnect bool) error {
     if evCh == nil {
         return ErrNilChan
     }
@@ -80,6 +73,10 @@ func Notify(uri string, evCh chan *Event) error {
             bs, err := br.ReadBytes('\n')
 
             if err != nil {
+                fmt.Errorf("Error reading bytes: %v.", err)
+                if (reconnect) {
+                    Notify(uri, evCh, reconnect)
+                }
                 return
             }
 
