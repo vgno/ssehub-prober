@@ -6,7 +6,9 @@ import (
     "bufio"
     "bytes"
     "fmt"
+    "log"
     "io"
+    "time"
     "net/http"
 )
 
@@ -23,7 +25,9 @@ var (
 )
 
 //Client is the default client used for requests.
-var Client = &http.Client{}
+var Client = &http.Client{
+    Timeout: time.Minute * 5,
+}
 
 func liveReq(method, uri string, body io.Reader) (*http.Request, error) {
     req, err := http.NewRequest(method, uri, body)
@@ -56,54 +60,55 @@ func Notify(uri string, evCh chan *Event, reconnect bool) error {
         return fmt.Errorf("error getting sse request: %v", err)
     }
 
-    res, err := Client.Do(req)
-    if err != nil {
-        return fmt.Errorf("error performing request for %s: %v", uri, err)
-    }
-
     go func() {
-        br := bufio.NewReader(res.Body)
-        defer res.Body.Close()
-
-        delim := []byte{':', ' '}
-
-        var currEvent *Event = &Event{URI: uri}
-
         for {
-            bs, err := br.ReadBytes('\n')
-
+            log.Printf("SSE: Connecting to %s", uri)
+            res, err := Client.Do(req)
             if err != nil {
-                fmt.Errorf("Error reading bytes: %v.", err)
-                if (reconnect) {
-                    Notify(uri, evCh, reconnect)
+                fmt.Errorf("error performing request for %s: %v", uri, err)
+                break;
+            }
+
+            br := bufio.NewReader(res.Body)
+            defer res.Body.Close()
+
+            delim := []byte{':', ' '}
+
+            var currEvent *Event = &Event{URI: uri}
+
+            for {
+                bs, err := br.ReadBytes('\n')
+
+                if err != nil {
+                    fmt.Errorf("Error reading bytes: %v.", err)
+                    break;
                 }
-                return
-            }
 
-            if (string(bs) == "\n") {
-                evCh <- currEvent
-                currEvent = &Event{URI: uri}
-                continue
-            }
+                if (string(bs) == "\n") {
+                    evCh <- currEvent
+                    currEvent = &Event{URI: uri}
+                    continue
+                }
 
-            if len(bs) < 2 {
-                continue
-            }
+                if len(bs) < 2 {
+                    continue
+                }
 
-            spl := bytes.Split(bs, delim)
+                spl := bytes.Split(bs, delim)
 
-            if len(spl) < 2 {
-                continue
-            }
+                if len(spl) < 2 {
+                    continue
+                }
 
 
-            switch string(spl[0]) {
-            case eName:
-                currEvent.Type = string(bytes.TrimSpace(spl[1]))
-            case iName:
-                currEvent.Id = string(bytes.TrimSpace(spl[1]))
-            case dName:
-                currEvent.Data = bytes.NewBuffer(bytes.TrimSpace(spl[1]))
+                switch string(spl[0]) {
+                case eName:
+                    currEvent.Type = string(bytes.TrimSpace(spl[1]))
+                case iName:
+                    currEvent.Id = string(bytes.TrimSpace(spl[1]))
+                case dName:
+                    currEvent.Data = bytes.NewBuffer(bytes.TrimSpace(spl[1]))
+                }
             }
         }
     }()

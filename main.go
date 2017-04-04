@@ -67,8 +67,6 @@ func amqpHandler() {
 func probeHandler() {
     sse.Notify(viper.GetString("ssehub.url"), probesReceived, true)
 
-    log.Printf("SSE: Connected to %s", viper.GetString("ssehub.url"))
-
     for {
         v := <- probesReceived
         if (v.Type == "probe") {
